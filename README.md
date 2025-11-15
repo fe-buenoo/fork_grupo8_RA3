@@ -1,219 +1,511 @@
-Resource Monitor — Namespaces, Cgroups e Profiling de Recursos
+# Resource Monitor — Sistema de Profiling e Análise de Recursos
 
-Este projeto implementa um sistema completo de monitoramento, análise e limitação de recursos no Linux, utilizando as interfaces do kernel:
+## Descrição do Projeto
 
-- /proc
-- /sys/fs/cgroup
-- Namespaces (CLONE_NEW*)
-- Control Groups (cgroup v1)
-- Syscalls de baixo nível (stat, clone, sched…)
+Este projeto implementa um sistema completo de monitoramento, análise e limitação de recursos no Linux, explorando as primitivas do kernel que tornam a containerização possível. O sistema é composto por três componentes principais integrados em um menu interativo.
 
-O objetivo é demonstrar como containers utilizam namespaces para isolamento e cgroups para controle e contabilização de recursos.
+### Objetivos
 
-Estrutura do Projeto:
+- Monitorar recursos de processos em tempo real (CPU, Memória, I/O e Rede)
+- Analisar isolamento via namespaces do Linux
+- Gerenciar e limitar recursos através de control groups (cgroups)
+- Compreender os mecanismos fundamentais utilizados por containers
 
+### Componentes Principais
+
+#### 1. Resource Profiler
+Coleta métricas detalhadas de processos através de `/proc`:
+- **CPU**: tempo de usuário/sistema, context switches, threads
+- **Memória**: RSS, VSZ, page faults, swap
+- **I/O**: bytes lidos/escritos, syscalls de I/O
+- **Rede**: bytes rx/tx, pacotes, conexões TCP ativas
+
+#### 2. Namespace Analyzer
+Analisa isolamento de processos via namespaces:
+- Lista todos os namespaces de um processo
+- Compara namespaces entre processos
+- Identifica processos membros de um namespace
+- Mede overhead de criação de namespaces
+- Gera relatórios em formato CSV
+
+#### 3. Control Group Manager
+Gerencia limitação de recursos via cgroups:
+- Lê métricas de controladores (CPU, Memory, BlkIO)
+- Cria e configura cgroups experimentais
+- Move processos entre cgroups
+- Aplica limites de CPU e memória
+- Gera relatórios de utilização vs limites
+
+## Estrutura do Projeto
+
+```
 resource-monitor/
-├── README.md
-├── Makefile
+├── README.md              # Este arquivo
+├── Makefile               # Automação de compilação
 ├── docs/
-│   └── ARCHITECTURE.md
+│   └── ARCHITECTURE.md    # Arquitetura do sistema
 ├── include/
-│   ├── monitor.h
-│   ├── namespace.h
-│   └── cgroup.h
+│   ├── monitor.h          # Interface do Resource Profiler
+│   ├── namespace.h        # Interface do Namespace Analyzer
+│   └── cgroup.h           # Interface do Control Group Manager
 ├── src/
-│   ├── cpu_monitor.c
-│   ├── memory_monitor.c
-│   ├── io_monitor.c
-│   ├── namespace_analyzer.c
-│   ├── cgroup_manager.c
-│   └── main.c
-└── tests/
-    ├── test_cpu.c
-    ├── test_memory.c
-    └── test_io.c
+│   ├── cpu_monitor.c      # Coleta de métricas de CPU
+│   ├── memory_monitor.c   # Coleta de métricas de memória
+│   ├── io_monitor.c       # Coleta de métricas de I/O e rede
+│   ├── namespace_analyzer.c  # Análise de namespaces
+│   ├── cgroup_manager.c   # Gerenciamento de cgroups
+│   └── main.c             # Menu integrado principal
+├── tests/
+│   ├── test_cpu.c         # Teste do monitor de CPU
+│   ├── test_memory.c      # Teste do monitor de memória
+│   └── test_io.c          # Teste do monitor de I/O
+└── scripts/
+    ├── visualize.py       # Visualização de dados (futuro)
+    └── compare_tools.sh   # Comparação com ferramentas (futuro)
+```
 
-Requisitos: 
+## Requisitos e Dependências
 
-- GCC
-- Linux Kernel 5.x ou superior
-- Cgroup v1 habilitado
-- Permissões de root para operações envolvendo cgroups e monitoramento de I/O
+### Sistema Operacional
+- **Linux Kernel 5.x ou superior** (testado em Ubuntu 20.04/22.04)
+- **WSL2** (Windows Subsystem for Linux) para desenvolvimento em Windows
+- Suporte a **cgroup v1** habilitado no sistema
 
-## Compilação:
+### Ferramentas de Desenvolvimento
+- **GCC** (GNU Compiler Collection) versão 9.0 ou superior
+- **Make** (GNU Make) para automação da compilação
+- **Git** para controle de versão
 
-**Observação:** Este projeto deve ser compilado e executado em ambiente Linux (use WSL no Windows).
+### Permissões Necessárias
+O programa requer privilégios de **root (sudo)** para:
+- Leitura de `/proc/<pid>/io` (monitoramento de I/O)
+- Operações em `/sys/fs/cgroup` (gerenciamento de cgroups)
+- Criação e manipulação de namespaces
+
+### Bibliotecas
+- **libc** (bibliotecas padrão C) - incluída no sistema
+- **libm** (biblioteca matemática) - incluída no sistema
+
+## Instruções de Compilação
+
+### Passo 1: Acessar o Ambiente Linux
+
+Se estiver no Windows, abra o terminal WSL:
 
 ```bash
-# Entrar no WSL (no Windows)
 wsl
+```
 
-# Navegar até a pasta do projeto
-cd /mnt/c/Users/[seu_usuario]/VSCodeProjects/grupo8_RA3
+### Passo 2: Navegar até o Diretório do Projeto
 
-# Compilar tudo (executável principal, testes e workloads)
+```bash
+cd /mnt/c/Users/[seu_usuario]/caminho/para/grupo8_RA3
+```
+
+### Passo 3: Compilar o Projeto
+
+```bash
+# Compilar tudo (executável principal + testes)
 make all
 
-# Compilar apenas o executável principal
+# OU compilar apenas o executável principal
 make resource-monitor
 
-# Compilar apenas os testes
+# OU compilar apenas os testes
 make tests
+```
 
-# Compilar apenas os workloads
-make workloads
+### Passo 4: Verificar a Compilação
 
-# Limpar arquivos compilados
+O projeto deve compilar **sem warnings**. Se aparecerem erros:
+
+```bash
+# Verificar versão do GCC (deve ser >= 9.0)
+gcc --version
+
+# Verificar kernel Linux (deve ser >= 5.0)
+uname -r
+```
+
+### Limpar Arquivos Compilados
+
+```bash
 make clean
 ```
 
-## Como Usar o Programa:
+## Instruções de Uso
 
-### **Método Recomendado: Menu Interativo com 2 Terminais**
+### Execução do Programa Principal
 
-O programa principal requer **dois terminais WSL** para funcionar corretamente:
-
-#### **Terminal 1 - Criar processo para monitorar:**
+O sistema possui um **menu interativo integrado**:
 
 ```bash
-wsl
-cd /mnt/c/Users/[seu_usuario]/VSCodeProjects/grupo8_RA3
-
-# Escolha um workload para criar um processo de teste:
-
-# Opção A: Workload de CPU (uso intensivo de processador)
-./workload_cpu 300
-
-# Opção B: Workload de Memória (aloca memória progressivamente)
-./workload_memory 500
-
-# Opção C: Workload de I/O (escreve/lê arquivos)
-./workload_io 100
-```
-
-**⚠️ IMPORTANTE:** Anote o **PID** que aparece na tela (ex: `PID do processo: 1234`)
-
-#### **Terminal 2 - Executar o menu de monitoramento:**
-
-```bash
-wsl
-cd /mnt/c/Users/[seu_usuario]/VSCodeProjects/grupo8_RA3
-
-# Executar com privilégios de root (necessário para I/O e cgroups)
+# Executar com privilégios de root
 sudo ./resource-monitor
 ```
 
-O menu principal oferece 3 componentes:
-- **1. Resource Profiler** - Monitorar CPU, Memória e I/O de processos
-- **2. Namespace Analyzer** - Analisar e comparar namespaces
-- **3. Control Group Manager** - Gerenciar cgroups e limites de recursos
+### Menu Principal
 
-**Exemplo de uso no menu:**
 ```
-Escolha uma opcao: 1         (Resource Profiler)
-Escolha uma opcao: 1         (Monitorar CPU)
-PID: 1234                    (PID anotado do Terminal 1)
-Duracao (s): 10              (Monitorar por 10 segundos)
+========================================
+   RESOURCE MONITOR - MENU PRINCIPAL
+========================================
+  1. Resource Profiler (CPU, Memoria, I/O)
+  2. Namespace Analyzer
+  3. Control Group Manager
+  0. Sair
+
+Escolha uma opcao:
 ```
 
-### **Método Alternativo: Testes Individuais**
+### Exemplos de Uso
 
-Você também pode usar os programas de teste individuais sem o menu:
+#### Exemplo 1: Monitorar CPU de um Processo
 
-### **Método Alternativo: Testes Individuais**
-
-Você também pode usar os programas de teste individuais sem o menu:
+**Pré-requisito**: Ter um processo em execução para monitorar.
 
 ```bash
-# Testar monitor de CPU (requer PID de um processo em execução)
+# Terminal 1: Iniciar um processo qualquer (ex: stress test)
+stress --cpu 1 --timeout 300s
+# Anote o PID exibido pelo comando: ps aux | grep stress
+
+# Terminal 2: Executar o monitor
+sudo ./resource-monitor
+
+# No menu:
+Escolha: 1 (Resource Profiler)
+Escolha: 1 (Monitorar CPU)
+PID: [PID_do_processo]
+Duracao (s): 10
+
+# Saída esperada:
+[1/10] CPU: 99.5% | Threads: 1
+[2/10] CPU: 99.8% | Threads: 1
+...
+```
+
+#### Exemplo 2: Analisar Namespaces de um Processo
+
+```bash
+sudo ./resource-monitor
+
+# No menu:
+Escolha: 2 (Namespace Analyzer)
+Escolha: 1 (Listar namespaces)
+PID: 1234
+
+# Saída esperada:
+PID 1234 namespaces:
+  pid  -> 4026531836
+  net  -> 4026531905
+  mnt  -> 4026531841
+  uts  -> 4026531838
+  ipc  -> 4026531839
+  user -> 4026531837
+```
+
+#### Exemplo 3: Criar e Limitar Recurso com Cgroup
+
+```bash
+sudo ./resource-monitor
+
+# No menu:
+Escolha: 3 (Control Group Manager)
+
+# Passo 1: Criar cgroup
+Escolha: 1 (Criar cgroup)
+Controlador: cpu
+Nome do grupo: teste_limite
+
+# Passo 2: Mover processo para o cgroup
+Escolha: 2 (Mover PID)
+Controlador: cpu
+Grupo: teste_limite
+PID: 1234
+
+# Passo 3: Definir limite de CPU (50% de 1 núcleo)
+Escolha: 4 (Definir limite de CPU)
+Grupo: teste_limite
+Cores: 0.5
+
+# Passo 4: Verificar uso atual
+Escolha: 6 (Ver uso de CPU)
+Grupo: teste_limite
+```
+
+### Programas de Teste Individuais
+
+Além do menu integrado, você pode executar testes individuais:
+
+```bash
+# Testar monitor de CPU
 ./test_cpu
 
 # Testar monitor de memória
 ./test_memory
 
-# Testar monitor de I/O (requer sudo para acesso a /proc/<pid>/io)
+# Testar monitor de I/O (requer sudo)
 sudo ./test_io
 ```
 
-## Programas de Workload (para testes):
-
-Os workloads criam processos que podem ser monitorados:
+### Como Obter PID de Processos
 
 ```bash
-# Workload intensivo de CPU (60 segundos padrão)
-./workload_cpu [duracao_segundos]
-# Exemplo: ./workload_cpu 30
+# Listar todos os processos
+ps aux
 
-# Workload intensivo de memória (aloca até 500 MB padrão)
-./workload_memory [max_memoria_mb]
-# Exemplo: ./workload_memory 200
+# Encontrar processo específico
+ps aux | grep [nome_processo]
 
-# Workload intensivo de I/O (arquivo de 100 MB padrão)
-./workload_io [tamanho_arquivo_mb]
-# Exemplo: ./workload_io 50
+# Ver PIDs por uso de CPU (em tempo real)
+top
+
+# Ver PID do próprio terminal
+echo $$
 ```
 
-## Documentação Adicional:
+## Metodologia de Testes
 
-- `docs/ARCHITECTURE.md` - Arquitetura do sistema
-- `docs/TESTES.md` - Documentação detalhada dos testes e workloads
+### Objetivo dos Testes
 
-## Requisitos do Sistema:
+Os programas de teste (`test_cpu`, `test_memory`, `test_io`) validam a precisão e funcionalidade dos monitores através de:
+1. Coleta de métricas em intervalos regulares
+2. Exibição em tempo real dos dados coletados
+3. Validação de leitura correta de `/proc` e `/sys`
 
-- **GCC** (compilador C)
-- **Linux Kernel 5.x ou superior**
-- **Cgroup v1** habilitado
-- **Permissões de root** (sudo) para:
-  - Monitoramento de I/O (`/proc/<pid>/io`)
-  - Operações com cgroups (`/sys/fs/cgroup`)
+### Procedimento de Teste Padrão
 
-## Contribuição dos Alunos:
+Para cada monitor, siga este procedimento:
 
-- Aluno 1 – Resource Profiler + Integração (Felipe Simionato Bueno)
+#### 1. Preparação
+```bash
+# Compilar o projeto
+make tests
 
-Coleta de CPU e memória
+# Identificar um processo para monitorar
+ps aux | grep [processo]
+```
 
-Integração dos módulos
+#### 2. Execução do Teste
+```bash
+# Para CPU e Memória
+./test_cpu
+# ou
+./test_memory
 
-Makefile base
+# Para I/O (requer sudo)
+sudo ./test_io
+```
 
-- Aluno 2 – Resource Profiler + Testes (Vinicius Pelissari Jordani)
+#### 3. Entrada de Dados
+```
+Digite o PID: [número_do_processo]
+Duração (segundos): [tempo_monitoramento]
+```
 
-Coleta de I/O (disco) e rede (estatísticas do sistema)
+#### 4. Análise dos Resultados
 
-Implementação de `io_monitor.c` com funções:
-  - `io_monitor_init()`: inicializa monitoramento de I/O
-  - `io_monitor_sample()`: coleta métricas de I/O e rede
+Os testes exibem métricas a cada segundo:
 
-Criação de `test_io.c` para validação do monitor de I/O
+**test_cpu:**
+```
+[1/10] CPU: 45.2% | Threads: 4 | Context Switches: 1523
+[2/10] CPU: 48.1% | Threads: 4 | Context Switches: 1687
+```
 
-Criação de workloads de teste:
-  - `workload_cpu.c`: stress de CPU com operações matemáticas
-  - `workload_memory.c`: alocação incremental de memória até limite configurável
-  - `workload_io.c`: ciclos de escrita/leitura de arquivos grandes
+**test_memory:**
+```
+[1/10] RSS: 125.4 MB | VSZ: 512.8 MB | Page Faults: 3421
+[2/10] RSS: 128.2 MB | VSZ: 512.8 MB | Page Faults: 3456
+```
 
-Atualização do Makefile com targets para testes e workloads
+**test_io:**
+```
+[1/10] Read: 2.4 MB/s | Write: 1.8 MB/s | Syscalls: 245
+[2/10] Read: 3.1 MB/s | Write: 2.2 MB/s | Syscalls: 312
+```
 
-Documentação de uso dos testes e workloads
+### Validação de Precisão
 
-- Aluno 3 – Namespace Analyzer (Kevin Mitsuo Lohmann Abe)
+Compare os resultados com ferramentas do sistema:
 
-Implementação completa do módulo de namespaces
+```bash
+# Comparar CPU com top
+top -p [PID]
 
-Listagem e comparação de namespaces
+# Comparar memória com ps
+ps -p [PID] -o pid,rss,vsz
 
-Identificação de membros por namespace
+# Comparar I/O com iotop (requer sudo)
+sudo iotop -p [PID]
+```
 
-Medição de overhead via clone()
+### Tratamento de Erros Comuns
 
-Geração de relatórios CSV
+| Erro | Causa | Solução |
+|------|-------|---------|
+| "Permission denied" | Falta de privilégios | Execute com `sudo` |
+| "No such process" | PID inválido ou processo morto | Verifique o PID com `ps -p [PID]` |
+| "Cannot read /proc/[PID]/io" | I/O requer root | Execute `sudo ./test_io` |
 
-Execução e documentação dos experimentos de isolamento
+### Casos de Teste Recomendados
 
-- Aluno 4 – Control Groups (João Barowski)
+1. **Processo de baixa carga**: `sleep 300` (PID estável, baixo uso)
+2. **Processo de alta CPU**: `stress --cpu 1` (uso próximo a 100%)
+3. **Processo com I/O**: `dd if=/dev/zero of=/tmp/test bs=1M count=100` (escrita intensiva)
 
-Implementação do Cgroup Manager
+## Autores e Contribuições
 
-Criação, configuração e leitura de cgroups
+### Grupo 8 - Turma 04N - Sistemas Operacionais
 
-Experimentos de limitação de CPU e memória
+#### Aluno 1: Felipe Simionato Bueno
+**Responsabilidade:** Resource Profiler + Integração
+
+**Contribuições:**
+- Implementação de `cpu_monitor.c`
+  - Coleta de tempo de CPU (user/system time)
+  - Cálculo de percentual de uso de CPU
+  - Contagem de threads e context switches
+- Implementação de `memory_monitor.c`
+  - Coleta de RSS (Resident Set Size) e VSZ (Virtual Size)
+  - Monitoramento de page faults e swap
+- Integração dos três componentes no menu principal (`main.c`)
+  - Desenvolvimento do menu hierárquico interativo
+  - Integração de Resource Profiler, Namespace Analyzer e Cgroup Manager
+- Criação do `Makefile` base
+  - Configuração de flags de compilação (`-Wall -Wextra -std=c17`)
+  - Definição de targets para compilação modular
+- Estruturação inicial do projeto e organização de diretórios
+
+#### Aluno 2: Vinicius Pelissari Jordani
+**Responsabilidade:** Resource Profiler + Testes
+
+**Contribuições:**
+- Implementação de `io_monitor.c`
+  - Função `io_monitor_init()`: inicialização do estado de monitoramento
+  - Função `io_monitor_sample()`: coleta de métricas de I/O via `/proc/<pid>/io`
+  - Coleta de estatísticas de rede via `/proc/net/dev`
+  - Contagem de conexões TCP ativas via `/proc/net/tcp`
+  - Cálculo de taxas de leitura/escrita (bytes/s)
+- Criação de `test_io.c` para validação do monitor de I/O
+  - Loop de amostragem configurável
+  - Exibição de métricas em tempo real
+- Atualização do Makefile com targets de testes
+  - Adição de regras para `test_cpu`, `test_memory`, `test_io`
+  - Configuração de linkagem com `-lm`
+- Correção de bugs críticos em `sscanf`
+  - Fix no parsing de `/proc/<pid>/stat` (cpu_monitor.c)
+  - Fix no parsing de `/proc/<pid>/statm` (memory_monitor.c)
+- Documentação de uso, testes e troubleshooting
+
+#### Aluno 3: Kevin Mitsuo Lohmann Abe
+**Responsabilidade:** Namespace Analyzer + Experimentos
+
+**Contribuições:**
+- Implementação completa de `namespace_analyzer.c`
+  - `list_process_namespaces()`: listagem de namespaces via `/proc/<pid>/ns/`
+  - `compare_namespaces()`: comparação de namespaces entre processos
+  - `list_namespace_members()`: identificação de processos por inode de namespace
+  - `measure_namespace_overhead()`: medição de overhead via `clone()` syscall
+  - `generate_namespace_report()`: geração de relatórios em formato CSV
+- Análise detalhada de tipos de namespace
+  - pid, net, mnt, uts, ipc, user
+  - Identificação de inodes únicos
+- Execução e documentação de experimentos de isolamento
+  - Medição de tempo de criação de namespaces
+  - Validação de efetividade de isolamento
+- Geração de relatórios científicos em CSV para análise posterior
+
+#### Aluno 4: João Barowski
+**Responsabilidade:** Control Group Manager + Análise
+
+**Contribuições:**
+- Implementação de `cgroup_manager.c`
+  - `cgroup_create()`: criação de cgroups em `/sys/fs/cgroup`
+  - `cgroup_move_pid()`: movimentação de processos entre cgroups
+  - `cgroup_set_cpu_limit()`: aplicação de limites de CPU
+  - `cgroup_set_memory_limit()`: aplicação de limites de memória
+  - `cgroup_get_cpu_usage()`: leitura de uso de CPU do cgroup
+  - `cgroup_get_memory_usage()`: leitura de uso de memória
+  - `cgroup_get_io_stats()`: leitura de estatísticas de I/O
+- Condução de experimentos de throttling
+  - Testes de precisão de limitação de CPU (0.25, 0.5, 1.0, 2.0 cores)
+  - Testes de limitação de memória e comportamento de OOM killer
+- Geração de relatórios comparativos (utilização vs limites configurados)
+- Testes de precisão e validação de funcionalidade dos cgroups
+
+## Interfaces do Kernel Utilizadas
+
+O projeto interage diretamente com as seguintes interfaces do kernel Linux:
+
+- **`/proc/<pid>/stat`**: Estatísticas de processos (CPU, threads, state)
+- **`/proc/<pid>/statm`**: Uso de memória (RSS, VSZ)
+- **`/proc/<pid>/status`**: Informações detalhadas (swap, context switches)
+- **`/proc/<pid>/io`**: Estatísticas de I/O (requer privilégios de root)
+- **`/proc/<pid>/ns/*`**: Namespaces de processos (pid, net, mnt, uts, ipc, user)
+- **`/proc/net/dev`**: Estatísticas de interfaces de rede
+- **`/proc/net/tcp`**: Conexões TCP ativas
+- **`/sys/fs/cgroup/*`**: Interfaces de control groups (cgroup v1)
+
+## Troubleshooting
+
+### Problema: "Permission denied" ao acessar /proc/<pid>/io
+**Solução:** Execute o programa com privilégios de root:
+```bash
+sudo ./resource-monitor
+# ou
+sudo ./test_io
+```
+
+### Problema: "No such file or directory" ao acessar cgroup
+**Solução:** Verifique se cgroup v1 está montado no sistema:
+```bash
+ls /sys/fs/cgroup/cpu
+ls /sys/fs/cgroup/memory
+```
+Se não existir, o sistema pode estar usando cgroup v2 (não suportado nesta versão).
+
+### Problema: "Não foi possível ler tempos do processo"
+**Solução:** Verifique se o processo ainda existe:
+```bash
+ps -p [PID]
+```
+Se não aparecer, o processo foi finalizado. Tente com outro PID.
+
+### Problema: Programa não compila no Windows
+**Solução:** Este programa requer APIs do Linux. Use WSL (Windows Subsystem for Linux):
+```bash
+# Instalar WSL (PowerShell como admin)
+wsl --install
+
+# Após instalação, abrir WSL
+wsl
+
+# Navegar para o projeto e compilar
+cd /mnt/c/Users/[usuario]/caminho/para/projeto
+make all
+```
+
+### Problema: Warnings durante compilação
+**Solução:** O projeto deve compilar sem warnings. Se aparecerem:
+1. Verifique a versão do GCC: `gcc --version` (recomendado >= 9.0)
+2. Certifique-se de estar compilando em Linux (não em Windows nativo)
+3. Reporte o warning para correção
+
+## Documentação Adicional
+
+- **docs/ARCHITECTURE.md**: Descrição detalhada da arquitetura do sistema
+- **include/*.h**: Documentação inline das interfaces (comentários doxygen-style)
+- **Código-fonte comentado**: Todas as funções principais possuem comentários explicativos
+
+## Licença
+
+Este projeto foi desenvolvido para fins acadêmicos como parte da disciplina de Sistemas Operacionais do **Insper - Instituto de Ensino e Pesquisa**, sob orientação do corpo docente.
+
+## Referências Técnicas
+
+- Linux Programmer's Manual: `man proc`, `man cgroups`, `man namespaces`
+- Kernel Documentation: `/Documentation/filesystems/proc.txt`
+- Control Groups v1: `/Documentation/cgroup-v1/`
+- Namespaces in operation: `man 7 namespaces`
+- The Linux Programming Interface (Michael Kerrisk)

@@ -263,4 +263,3 @@ void list_all_system_namespaces(void) {
         }
     }
 }
-

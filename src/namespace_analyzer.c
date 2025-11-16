@@ -1,5 +1,4 @@
-/* -- Includes, defines, structs e constantes necessárias -- */
-
+#define _GNU_SOURCE
 #include "namespace.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +11,6 @@
 #include <sys/wait.h>
 #include <ctype.h>
 
-#define _GNU_SOURCE
 #define NS_PATH_FMT "/proc/%d/ns/%s"
 #define STACK_SIZE 8192
 
@@ -28,7 +26,7 @@ typedef struct NSNode {
     struct NSNode *next;
 } NSNode;
 
-/* ------------------ Funções Auxiliares --------------------- */
+/* ----------------------------- HELPERS ----------------------------- */
 
 static void add_inode(NSNode **list, long long inode);
 
@@ -265,4 +263,3 @@ void list_all_system_namespaces(void) {
         }
     }
 }
-

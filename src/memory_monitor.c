@@ -199,3 +199,52 @@ int memory_monitor_sample(pid_t pid, MemorySample *sample) {
 
     return 0;
 }
+
+int memory_sample_csv_write(const MemorySample *sample) {
+    static FILE *fp = NULL;        // mesmo arquivo para toda a coleta
+
+    if (!sample) {
+        fprintf(stderr, "Erro: ponteiro nulo em memory_sample_csv_write\n");
+        return -1;
+    }
+
+    // cria o arquivo na primeira chamada
+    if (!fp) {
+        // Formata o timestamp para o nome do arquivo (YYYYMMDD_HHMMSS)
+        struct tm *tm_info = localtime(&sample->timestamp);
+        char filename[64];
+        snprintf(filename, sizeof(filename),
+                 "memory-monitor-%04d%02d%02d_%02d%02d%02d.csv",
+                 tm_info->tm_year + 1900,
+                 tm_info->tm_mon + 1,
+                 tm_info->tm_mday,
+                 tm_info->tm_hour,
+                 tm_info->tm_min,
+                 tm_info->tm_sec);
+
+        fp = fopen(filename, "w");
+        if (!fp) {
+            fprintf(stderr, "Erro: nao foi possivel criar %s\n", filename);
+            return -1;
+        }
+
+        // Escreve o cabeçalho do CSV
+        fprintf(fp, "timestamp,pid,rss_bytes,vsize_bytes,page_faults,swap_bytes\n");
+        fflush(fp);
+    }
+
+    if (fprintf(fp,
+                "%lld,%d,%llu,%llu,%llu,%llu\n",
+                (long long)sample->timestamp,
+                (int)sample->pid,
+                (unsigned long long)sample->rss_bytes,
+                (unsigned long long)sample->vsize_bytes,
+                (unsigned long long)sample->page_faults,
+                (unsigned long long)sample->swap_bytes) < 0) {
+        fprintf(stderr, "Erro: nao foi possivel escrever linha CSV\n");
+        return -1;
+    }
+
+    fflush(fp);
+    return 0;
+}

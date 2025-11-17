@@ -27,7 +27,7 @@ typedef struct {
 
 int cpu_monitor_init(CpuMonitorState *state, pid_t pid);
 int cpu_monitor_sample(CpuMonitorState *state, CpuSample *sample);
-int cpu_sample_write_csv(const CpuSample *sample, FILE *fp);
+int cpu_sample_csv_write(const CpuSample *sample);
 
 /* ==================== MEMORY SAMPLE ==================== */
 
@@ -43,6 +43,7 @@ typedef struct {
 
 int memory_monitor_sample(pid_t pid, MemorySample *sample);
 int memory_sample_write_csv(const MemorySample *sample, FILE *fp);
+int memory_sample_csv_write(const MemorySample *sample);
 
 /* ====================== I/O SAMPLE ====================== */
 
@@ -76,5 +77,6 @@ typedef struct {
 
 int io_monitor_init(IoMonitorState *state, pid_t pid);
 int io_monitor_sample(IoMonitorState *state, IoSample *sample, double interval_sec);
+int io_sample_csv_write(const IoSample *sample);
 
 #endif

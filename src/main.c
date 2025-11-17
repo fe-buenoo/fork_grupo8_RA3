@@ -106,8 +106,13 @@ void handle_profiler_menu(void) {
                         CpuSample smp;
                         sleep(1);
                         if (cpu_monitor_sample(&cs, &smp) == 0) {
-                            printf("[%d/%d] CPU: %.2f%% | Threads: %llu\n", 
-                                   i+1, dur, smp.cpu_percent, smp.threads);
+                            struct tm *tm_info = localtime(&smp.timestamp);
+                            char time_str[32];
+                            strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
+                            printf("[%s] CPU: %.2f%% | User: %llu ticks | System: %llu ticks | Ctx Sw: %llu | Threads: %llu\n", 
+                                   time_str, smp.cpu_percent, smp.user_time_ticks, 
+                                   smp.system_time_ticks, smp.context_switches, smp.threads);
+                            cpu_sample_csv_write(&smp); // salva em CSV
                         }
                     }
                 }
@@ -123,10 +128,16 @@ void handle_profiler_menu(void) {
                     MemorySample ms;
                     sleep(1);
                     if (memory_monitor_sample(pid, &ms) == 0) {
-                        printf("[%d/%d] RSS: %.2f MB | VSZ: %.2f MB\n",
-                               i+1, dur, 
+                        struct tm *tm_info = localtime(&ms.timestamp);
+                        char time_str[32];
+                        strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
+                        printf("[%s] RSS: %.2f MB | VSZ: %.2f MB | Page Faults: %llu | Swap: %.2f MB\n",
+                               time_str, 
                                ms.rss_bytes/(1024.0*1024.0),
-                               ms.vsize_bytes/(1024.0*1024.0));
+                               ms.vsize_bytes/(1024.0*1024.0),
+                               ms.page_faults,
+                               ms.swap_bytes/(1024.0*1024.0));
+                        memory_sample_csv_write(&ms); // salva em CSV
                     }
                 }
                 break;
@@ -144,10 +155,16 @@ void handle_profiler_menu(void) {
                         IoSample ios;
                         sleep(1);
                         if (io_monitor_sample(&is, &ios, 1.0) == 0) {
-                            printf("[%d/%d] R: %.2f KB/s | W: %.2f KB/s\n",
-                                   i+1, dur,
+                            struct tm *tm_info = localtime(&ios.timestamp);
+                            char time_str[32];
+                            strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
+                            printf("[%s] R: %.2f KB/s | W: %.2f KB/s | Syscalls: %llu | Ops/s: %.2f\n",
+                                   time_str,
                                    ios.read_rate_bytes_per_sec/1024.0,
-                                   ios.write_rate_bytes_per_sec/1024.0);
+                                   ios.write_rate_bytes_per_sec/1024.0,
+                                   ios.io_syscalls,
+                                   ios.disk_ops_per_sec);
+                            io_sample_csv_write(&ios); // salva em CSV
                         }
                     }
                 }
@@ -164,7 +181,11 @@ void handle_profiler_menu(void) {
                 cpu_monitor_init(&csa, pid);
                 int io_ok = (io_monitor_init(&isa, pid) == 0);
                 
-                printf("\nMonitorando tudo...\n");
+                printf("\n========================================\n");
+                printf("     MONITORAMENTO COMPLETO (PID: %d)    \n", pid);
+                printf("========================================\n");
+                printf("Dados serao salvos em 3 arquivos CSV\n\n");
+                
                 for (int i = 0; i < dur; i++) {
                     CpuSample c; MemorySample m; IoSample io;
                     sleep(1);
@@ -172,11 +193,45 @@ void handle_profiler_menu(void) {
                     memory_monitor_sample(pid, &m);
                     if (io_ok) io_monitor_sample(&isa, &io, 1.0);
                     
-                    printf("[%d/%d] CPU: %.1f%% | Mem: %.1f MB",
-                           i+1, dur, c.cpu_percent, m.rss_bytes/(1024.0*1024.0));
-                    if (io_ok) printf(" | I/O: %.1f KB/s", 
-                                      (io.read_rate_bytes_per_sec+io.write_rate_bytes_per_sec)/1024.0);
-                    printf("\n");
+                    struct tm *tm_info = localtime(&c.timestamp);
+                    char time_str[32];
+                    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
+                    
+                    printf("┌─ [%s] ────────────────\n", time_str);
+                    printf("│ CPU:\n");
+                    printf("│   ├─ Uso: %.2f%%\n", c.cpu_percent);
+                    printf("│   ├─ User time: %llu ticks\n", c.user_time_ticks);
+                    printf("│   ├─ System time: %llu ticks\n", c.system_time_ticks);
+                    printf("│   ├─ Context switches: %llu\n", c.context_switches);
+                    printf("│   └─ Threads: %llu\n", c.threads);
+                    printf("│\n");
+                    printf("│ MEMORIA:\n");
+                    printf("│   ├─ RSS: %.2f MB\n", m.rss_bytes/(1024.0*1024.0));
+                    printf("│   ├─ VSZ: %.2f MB\n", m.vsize_bytes/(1024.0*1024.0));
+                    printf("│   ├─ Page faults: %llu\n", m.page_faults);
+                    printf("│   └─ Swap: %.2f MB\n", m.swap_bytes/(1024.0*1024.0));
+                    
+                    if (io_ok) {
+                        printf("│\n");
+                        printf("│ I/O DISCO:\n");
+                        printf("│   ├─ Leitura: %.2f KB/s\n", io.read_rate_bytes_per_sec/1024.0);
+                        printf("│   ├─ Escrita: %.2f KB/s\n", io.write_rate_bytes_per_sec/1024.0);
+                        printf("│   ├─ Syscalls: %llu\n", io.io_syscalls);
+                        printf("│   └─ Ops/s: %.2f\n", io.disk_ops_per_sec);
+                        printf("│\n");
+                        printf("│ REDE:\n");
+                        printf("│   ├─ RX: %.2f MB (%llu pacotes)\n", 
+                               io.rx_bytes/(1024.0*1024.0), io.rx_packets);
+                        printf("│   ├─ TX: %.2f MB (%llu pacotes)\n", 
+                               io.tx_bytes/(1024.0*1024.0), io.tx_packets);
+                        printf("│   └─ Conexoes: %llu\n", io.connections);
+                    }
+                    printf("└────────────────────────────────────────\n\n");
+                    
+                    // Salva em CSVs separados
+                    cpu_sample_csv_write(&c);
+                    memory_sample_csv_write(&m);
+                    if (io_ok) io_sample_csv_write(&io);
                 }
                 break;
         }

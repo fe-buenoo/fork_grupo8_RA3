@@ -322,3 +322,60 @@ int io_monitor_sample(IoMonitorState *state, IoSample *sample, double interval_s
     
     return 0;
 }
+
+int io_sample_csv_write(const IoSample *sample) {
+    static FILE *fp = NULL;        // mesmo arquivo para toda a coleta
+
+    if (!sample) {
+        fprintf(stderr, "Erro: ponteiro nulo em io_sample_csv_write\n");
+        return -1;
+    }
+
+    // cria o arquivo na primeira chamada
+    if (!fp) {
+        // Formata o timestamp para o nome do arquivo (YYYYMMDD_HHMMSS)
+        struct tm *tm_info = localtime(&sample->timestamp);
+        char filename[64];
+        snprintf(filename, sizeof(filename),
+                 "io-monitor-%04d%02d%02d_%02d%02d%02d.csv",
+                 tm_info->tm_year + 1900,
+                 tm_info->tm_mon + 1,
+                 tm_info->tm_mday,
+                 tm_info->tm_hour,
+                 tm_info->tm_min,
+                 tm_info->tm_sec);
+
+        fp = fopen(filename, "w");
+        if (!fp) {
+            fprintf(stderr, "Erro: nao foi possivel criar %s\n", filename);
+            return -1;
+        }
+
+        // Escreve o cabeçalho do CSV
+        fprintf(fp, "timestamp,pid,read_bytes,write_bytes,io_syscalls,disk_ops,read_rate_bytes_per_sec,write_rate_bytes_per_sec,disk_ops_per_sec,rx_bytes,tx_bytes,rx_packets,tx_packets,connections\n");
+        fflush(fp);
+    }
+
+    if (fprintf(fp,
+                "%lld,%d,%llu,%llu,%llu,%llu,%.2f,%.2f,%.2f,%llu,%llu,%llu,%llu,%llu\n",
+                (long long)sample->timestamp,
+                (int)sample->pid,
+                (unsigned long long)sample->read_bytes,
+                (unsigned long long)sample->write_bytes,
+                (unsigned long long)sample->io_syscalls,
+                (unsigned long long)sample->disk_ops,
+                sample->read_rate_bytes_per_sec,
+                sample->write_rate_bytes_per_sec,
+                sample->disk_ops_per_sec,
+                (unsigned long long)sample->rx_bytes,
+                (unsigned long long)sample->tx_bytes,
+                (unsigned long long)sample->rx_packets,
+                (unsigned long long)sample->tx_packets,
+                (unsigned long long)sample->connections) < 0) {
+        fprintf(stderr, "Erro: nao foi possivel escrever linha CSV\n");
+        return -1;
+    }
+
+    fflush(fp);
+    return 0;
+}
